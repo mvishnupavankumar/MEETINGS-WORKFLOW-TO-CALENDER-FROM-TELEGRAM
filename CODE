@@ -1,0 +1,887 @@
+{
+  "name": "MEETINGS WORKFLOW TO CALENDER FROM TELEGRAM",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GMAIL_ADDRESS",
+          "mode": "list",
+          "cachedResultName": "YOUR_GMAIL_ADDRESS"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $json.timeMin }}",
+        "timeMax": "={{ $json.timeMax }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        120,
+        -280
+      ],
+      "id": "3c0922e5-f61c-45af-990a-9757e8b8efa2",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GMAIL_ADDRESS",
+          "mode": "list",
+          "cachedResultName": "YOUR_GMAIL_ADDRESS"
+        },
+        "start": "= {{ $json.start.dateTime }}",
+        "end": "= {{ $json.end.dateTime }}",
+        "additionalFields": {
+          "description": "=<a href=\"{{ $json.description }}\">Join Meeting</a>",
+          "location": "Asia/Kolkata",
+          "summary": "= {{ $json.summary }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        380,
+        320
+      ],
+      "id": "7dcf59e1-ba3b-43c5-a4f5-a0e1c8ffb899",
+      "name": "Create an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "REPLACE_ME",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": " const content = $json.body?.choices?.[0]?.message?.content;\n\nif (!content) {\n  throw new Error(\"No content found in the response\");\n}\n\nconst lines = content.split('\\n').map(line => line.trim());\n\nconst getValue = (label) => {\n  const line = lines.find(l => l.toUpperCase().startsWith(label.toUpperCase() + ':'));\n  return line ? line.split(':').slice(1).join(':').trim() : null;\n};\n\nconst meeting = getValue('MEETING');\nconst date = getValue('DATE');\nconst timeRaw = getValue('TIME');\nconst link = getValue('LINK') || 'No link provided';\n\nif (!meeting || !date || !timeRaw) {\n  throw new Error('Missing meeting, date, or time in input');\n}\n\n// Normalize time format\nfunction normalizeTime(t) {\n  t = t.trim().toUpperCase();\n  if (!t.includes(':')) {\n    // e.g., \"10PM\" -> \"10:00PM\"\n    t = t.replace(/(AM|PM)/, ':00$1');\n  }\n  return t;\n}\n\nconst [startRaw, endRaw] = timeRaw.split('-').map(t => normalizeTime(t.trim()));\n\nreturn [\n  {\n    json: {\n      meeting,\n      date,\n      \"start time\": startRaw,\n      \"end time\": endRaw,\n      link\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "abdd7b4d-75e8-4c9b-abd8-ef93e4a7c0c1",
+      "name": "CLEAN MEETING DETAILS"
+    },
+    {
+      "parameters": {
+        "jsCode": " function convertTo24Hour(timeStr) {\n  const clean = timeStr.trim().toUpperCase().replace(/\\s+/g, '');\n  const match = clean.match(/^(\\d{1,2})(?::(\\d{2}))?(AM|PM)$/);\n\n  if (!match) throw new Error('Invalid time format');\n\n  let hour = parseInt(match[1], 10);\n  let minute = parseInt(match[2] || '00', 10);\n  const period = match[3];\n\n  if (period === 'PM' && hour !== 12) hour += 12;\n  if (period === 'AM' && hour === 12) hour = 0;\n\n  return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;\n}\n\nconst dateParts = $json.date.split('-'); // DD-MM-YYYY\nconst formattedDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;\n\nconst start = convertTo24Hour($json['start time']);\nconst end = convertTo24Hour($json['end time']);\n\nconst startISO = `${formattedDate}T${start}:00+05:30`;\nconst endISO = `${formattedDate}T${end}:00+05:30`;\n\nreturn {\n  json: {\n    summary: $json.meeting || \"Untitled\",\n    description: $json.link || \"No link provided\",\n    start: {\n      dateTime: startISO,\n      timeZone: \"Asia/Kolkata\"\n    },\n    end: {\n      dateTime: endISO,\n      timeZone: \"Asia/Kolkata\"\n    }\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        320
+      ],
+      "id": "67c1ed18-1514-48df-bdaf-d7ceddf3cdad",
+      "name": " SET TIMINGS AS CALENER UNDERSTAND"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "= {{ $json.text }} ",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        200
+      ],
+      "id": "49585614-1a4d-41dc-af2d-e18a6f486b61",
+      "name": "Send a text message",
+      "webhookId": "YOUR_WEBHOOK_URL",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": " Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENROUTER_BEARER_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "= {\n  \"model\": \"mistralai/mistral-7b-instruct\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a meeting data extractor.\\n\\nYou understand natural human language, casual phrases, and time expressions. Your job is to extract clean and structured meeting details from informal text.\\n\\n🕒 Timezone: IST (UTC+5:30)\\nToday's date is: {{ $now.setZone('Asia/Kolkata').toFormat('dd-MM-yyyy') }}\\nTomorrow's date is: {{ $now.setZone('Asia/Kolkata').plus({ days: 1 }).toFormat('dd-MM-yyyy') }}\\n\\n🎯 Extract exactly:\\n- MEETING: The subject of the meeting (exclude time, date, or link)\\n- DATE: In DD-MM-YYYY format (interpret words like 'tomorrow', 'next week', '7th of next month')\\n- TIME: Start and end time in **strict 12-hour format**, like `10am - 11am`, or `11:30pm - 12:15am` (no parentheses, no extra text)\\n- LINK: The full meeting link. If not available, write exactly: `No link provided`\\n\\n🧠 Time Rules:\\n1. If start & end time exist → use them.\\n2. If start time + duration (e.g. 45 minutes) → calculate end time.\\n3. If only start time → leave TIME blank.\\n4. If no time → leave TIME blank.\\n5. If no link → write: `No link provided` (no assumptions, no notes)\\n\\n❌ DO NOT add notes, assumptions, or extra text in parentheses.\\n\\n📌 Format the output **strictly like this**:\\n\\nMEETING: <subject>\\nDATE: <dd-mm-yyyy>\\nTIME: <start - end> (or leave blank)\\nLINK: <full link or 'No link provided'>\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.message.text }}\"\n    }\n  ]\n}\n",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        300
+      ],
+      "id": "9c2dad9c-4c55-4c1f-af70-8c0fce771365",
+      "name": " TAKES MEETING DETAILS1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": " Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENROUTER_BEARER_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "= {\n  \"model\": \"mistralai/mistral-7b-instruct\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a smart calendar date extractor.\\n\\n🕒 Timezone: IST (UTC+5:30)\\n📅 Today is {{ $now.setZone('Asia/Kolkata').toFormat('dd-MM-yyyy') }}.\\n\\nYour job:\\n- If the user mentions a **specific date or a single-day reference** like 'today', 'tomorrow', '7th July', '15th August', etc. → respond with:\\n  DATE: <DD-MM-YYYY>\\n\\n- If the user mentions a **time range** more than 1 day (like 'next 3 days', 'this month', 'this year', '5th to 10th', etc.) → respond with:\\n  DATE_RANGE: <DD-MM-YYYY> to <DD-MM-YYYY>\\n\\n⚠️ Don't return both. Choose only one:\\n✅ Either `DATE:` if it's just 1 day\\n✅ Or `DATE_RANGE:` if more than 1 day\\n\\n🛑 Respond with only:\\n- DATE: <date>\\n- or\\n- DATE_RANGE: <start-date> to <end-date>\\n\\nExamples:\\n- Input: 'today' → DATE: 05-07-2025\\n- Input: 'tomorrow' → DATE: 06-07-2025\\n- Input: 'this month' → DATE_RANGE: 01-07-2025 to 31-07-2025\\n- Input: 'next 3 days' → DATE_RANGE: 06-07-2025 to 08-07-2025\\n- Input: '15th August' → DATE: 15-08-2025\\n- Input: 'from 5th July to 10th July' → DATE_RANGE: 05-07-2025 to 10-07-2025\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.message.text }}\"\n    }\n  ]\n}\n",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -260,
+        100
+      ],
+      "id": "75150b02-4017-452f-a490-15a1cb05cd27",
+      "name": " TAKES SEARCHING DETAILS"
+    },
+    {
+      "parameters": {
+        "jsCode": " function toISOStringInIST(year, month, day, hour, minute, second) {\n  const localDate = new Date(year, month - 1, day, hour, minute, second);\n  return new Date(localDate.getTime() - (330 * 60000)).toISOString(); // IST offset is +5:30 = 330 minutes\n}\n\nconst content = $json.body?.choices?.[0]?.message?.content;\nif (!content) throw new Error(\"No content from LLM response\");\n\nconst rangeMatch = content.match(/DATE_RANGE:\\s*(\\d{2}-\\d{2}-\\d{4})\\s*to\\s*(\\d{2}-\\d{2}-\\d{4})/);\nconst singleMatch = content.match(/DATE:\\s*(\\d{2}-\\d{2}-\\d{4})/);\n\nif (rangeMatch) {\n  const [_, startDate, endDate] = rangeMatch;\n  const [startDay, startMonth, startYear] = startDate.split('-').map(Number);\n  const [endDay, endMonth, endYear] = endDate.split('-').map(Number);\n\n  const timeMin = toISOStringInIST(startYear, startMonth, startDay, 0, 0, 0);\n  const timeMax = toISOStringInIST(endYear, endMonth, endDay, 23, 59, 59);\n\n  return [{\n    json: {\n      timeMin,\n      timeMax,\n      readableDate: `${startDate} to ${endDate}`\n    }\n  }];\n}\n\nif (singleMatch) {\n  const [_, date] = singleMatch;\n  const [day, month, year] = date.split('-').map(Number);\n\n  const timeMin = toISOStringInIST(year, month, day, 0, 0, 0);\n  const timeMax = toISOStringInIST(year, month, day, 23, 59, 59);\n\n  return [{\n    json: {\n      timeMin,\n      timeMax,\n      readableDate: date\n    }\n  }];\n}\n\nthrow new Error(\"No valid date or date range found\");\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        100
+      ],
+      "id": "31ff17c8-f0d0-41cc-baa5-5cfce7bafe90",
+      "name": " CONVERTS THAT CALENDER UNDERSTAND"
+    },
+    {
+      "parameters": {
+        "jsCode": " const input = $json.events || [];\nlet message = \"\";\n\nfor (const event of input) {\n  const summary = (event.summary || \"Untitled Event\").trim();\n  const link = event.htmlLink || \"No link provided\";\n\n  if (event.start.date) {\n    const date = event.start.date.split(\"-\").reverse().join(\"-\");\n    message += `Event: ${summary}\\nDate: ${date}\\nAll Day Event\\nLink: ${link}\\n\\n`;\n  } else {\n    const startDate = new Date(event.start.dateTime);\n    const endDate = new Date(event.end.dateTime);\n\n    const date = startDate.toLocaleDateString(\"en-GB\");\n\n    const startTime = startDate.toLocaleTimeString(\"en-IN\", {\n      hour: \"2-digit\",\n      minute: \"2-digit\",\n      hour12: true,\n      timeZone: \"Asia/Kolkata\"\n    });\n\n    const endTime = endDate.toLocaleTimeString(\"en-IN\", {\n      hour: \"2-digit\",\n      minute: \"2-digit\",\n      hour12: true,\n      timeZone: \"Asia/Kolkata\"\n    });\n\n    message += `Event: ${summary}\\nDate: ${date}\\nStart Time: ${startTime}\\nEnd Time: ${endTime}\\nLink: ${link}\\n\\n`;\n  }\n}\n\nreturn [{ json: { text: message.trim() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        -260
+      ],
+      "id": "5e18459c-6016-44d2-b259-7ed918e7fc16",
+      "name": "EDIT EVENTS"
+    },
+    {
+      "parameters": {
+        "jsCode": " const message = $json.MESSAGE;\n\nconst match = message.match(/MEETING SET:\\s*(.+?)\\nFROM\\s*:(.+?)\\nTO\\s*:(.+)/);\n\nif (!match) {\n  return [{ json: { error: \"Invalid format\" } }];\n}\n\nconst meeting = match[1].trim();\nconst fromDateTime = new Date(match[2].trim());\nconst toDateTime = new Date(match[3].trim());\n\nconst formatDate = (dateObj) => {\n  const date = dateObj.toLocaleDateString(\"en-GB\");\n  const time = dateObj.toLocaleTimeString(\"en-IN\", {\n    hour: \"numeric\",\n    hour12: true,\n    timeZone: \"Asia/Kolkata\"\n  }).replace(/ /g, \"\");\n  return `${date}, ${time}`;\n};\n\nconst fromFormatted = formatDate(fromDateTime);\nconst toFormatted = formatDate(toDateTime);\n\nconst output = `MEETING SETED: ${meeting}\\nFROM: ${fromFormatted}\\nTO: ${toFormatted}`;\n\nreturn [{ json: { text: output } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        340
+      ],
+      "id": "4d605653-bef2-4c2b-9d4e-bdbb9a77639a",
+      "name": "EDIT MESSAGE"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f09d8e9e-f423-4781-aede-ca6b81b1d3fc",
+              "name": "MESSAGE",
+              "value": "=✅ MEETING SET: {{$json.summary}}\nFROM :{{$json.start.dateTime}}\nTO: {{$json.end.dateTime}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        320
+      ],
+      "id": "2029c237-2db1-4128-b676-77dfbbc6bc23",
+      "name": " TAKES CONFIRMATION MESSAGE"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        580,
+        -240
+      ],
+      "id": "37e3e976-838b-4ac7-9c54-aba0bb71bc48",
+      "name": "Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        820,
+        140
+      ],
+      "id": "1e395591-d5c4-478d-9b9f-a62eda1e6ba6",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -640,
+        180
+      ],
+      "id": "8adb79da-018b-4a96-9ac3-3f1ad6144db0",
+      "name": " TAKES MESSAGE",
+      "webhookId": "YOUR_WEBHOOK_URL",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1f3a81b2-dbb5-439d-8928-a166bfd25b73",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "check",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4649ba7b-8a1f-4c79-bdc8-cc7ac150b03a",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "free",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8b8b696c-5ff3-4379-9ac2-54fe9a4d92ca",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "find",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "99e36684-4301-4968-8dc5-51d0208429e1",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "set",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7aca2356-4eb3-44a0-826f-85a4d8faeb91",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "arrange",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4d3ed27f-724c-43f2-b0ea-090156d1d26b",
+                    "leftValue": "=  {{ $json.message.text.toLowerCase() }}",
+                    "rightValue": "create",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -460,
+        140
+      ],
+      "id": "76c2855a-bf40-47a4-937a-e72f5b2346ba",
+      "name": " SWITCHES BASED ON MESSAGE"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "100b9057-7875-4c86-8127-90481a9722dd",
+              "name": "EVENTS",
+              "value": " {   \"EVENTS\": \" {   \\\"hasEvents\\\": false,   \\\"events\\\": [] }\" }",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        180,
+        -80
+      ],
+      "id": "59e50a21-5e75-4894-bf1a-481adc06ed23",
+      "name": " SEND DUMMY "
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "= NO MEETINGS FOR THE GIVEN:\n{{ $json.readableDate }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1400,
+        140
+      ],
+      "id": "f2b0c5e4-b912-44f9-8821-197866eb978d",
+      "name": "Send a text message1",
+      "webhookId": "YOUR_WEBHOOK_URL",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": " const istOffsetMs = 5.5 * 60 * 60 * 1000;\nconst now = new Date();\nconst nowIST = new Date(now.getTime() + istOffsetMs);\n\n// Calculate the date 3 months ago from current date\nconst threeMonthsAgo = new Date(nowIST);\nthreeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);\nthreeMonthsAgo.setHours(0, 0, 0, 0);\n\n// Convert input date\nconst inputRaw = $json.inputDate;\nconst inputDate = Array.isArray(inputRaw) ? new Date(inputRaw[0]) : new Date(inputRaw);\nconst inputIST = new Date(inputDate.getTime() + istOffsetMs);\ninputIST.setHours(0, 0, 0, 0);\n\n// Compare\nif (inputIST < threeMonthsAgo) {\n  return [{ json: { hasEvents: false, events: [] } }];\n}\n\n// Just forward the entire original input items if within 3 months\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -280
+      ],
+      "id": "ae8902d1-a842-4300-9592-b11134ba42cd",
+      "name": " CHECKS DATA"
+    },
+    {
+      "parameters": {
+        "jsCode": " // Step 1: Extract outer string and parse it\nconst outer = $json.EVENTS;\nconst parsedOuter = JSON.parse(outer);\n\n// Step 2: Extract inner string and parse again\nconst inner = parsedOuter.EVENTS;\nconst parsedInner = JSON.parse(inner);\n\n// Now return the actual object\nreturn [{ json: parsedInner }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        -80
+      ],
+      "id": "aea3eb8c-e4c1-42d9-be6d-ef9bb6f3fee6",
+      "name": " TAKE DUMMY DATA"
+    },
+    {
+      "parameters": {
+        "jsCode": " // Combine and filter real events from merged data\nconst events = items.flatMap(item => {\n  return Array.isArray(item.json.events)\n    ? item.json.events\n    : (item.json.summary || item.json.start ? [item.json] : []);\n});\n\nif (events.length === 0) {\n  return [{\n    json: {\n      hasEvents: false,\n      events: []\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    hasEvents: true,\n    events\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        -240
+      ],
+      "id": "89674a28-64af-4fca-a5f8-e9c20c256360",
+      "name": "CHECKS EVENT PRESENT OR NOT"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.hasEvents }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    },
+                    "id": "d61a143f-6165-46d1-94f3-6ad217b8b518"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a561394d-41e3-4ebd-9092-65857ec81509",
+                    "leftValue": "={{ $json.hasEvents }}",
+                    "rightValue": "false",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "false",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        980,
+        -240
+      ],
+      "id": "50534564-9abd-437e-8c98-3f00afd035ae",
+      "name": "SWITCHES BASED EVENT PRESENT OR NOT"
+    },
+    {
+      "parameters": {
+        "jsCode": " const hasEventsData = $items()[0].json;\nconst dateRangeData = $items()[1].json;\n\nif (\n  hasEventsData.hasEvents !== undefined &&\n  dateRangeData.timeMin &&\n  dateRangeData.timeMax &&\n  dateRangeData.readableDate\n) {\n  return [{\n    json: {\n      readableDate: dateRangeData.readableDate,\n      timeMin: dateRangeData.timeMin,\n      timeMax: dateRangeData.timeMax,\n      hasEvents: hasEventsData.hasEvents,\n      events: hasEventsData.events\n    }\n  }];\n} else {\n  return [];\n}\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        140
+      ],
+      "id": "20e0f1cb-20fe-4ee8-93db-c744fbc8446c",
+      "name": "SEND MESSAGE"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": " CHECKS DATA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CLEAN MEETING DETAILS": {
+      "main": [
+        [
+          {
+            "node": " SET TIMINGS AS CALENER UNDERSTAND",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " SET TIMINGS AS CALENER UNDERSTAND": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": " TAKES CONFIRMATION MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " TAKES MEETING DETAILS1": {
+      "main": [
+        [
+          {
+            "node": "CLEAN MEETING DETAILS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " TAKES SEARCHING DETAILS": {
+      "main": [
+        [
+          {
+            "node": " CONVERTS THAT CALENDER UNDERSTAND",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " CONVERTS THAT CALENDER UNDERSTAND": {
+      "main": [
+        [
+          {
+            "node": " SEND DUMMY ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "EDIT EVENTS": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EDIT MESSAGE": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " TAKES CONFIRMATION MESSAGE": {
+      "main": [
+        [
+          {
+            "node": "EDIT MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "CHECKS EVENT PRESENT OR NOT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "SEND MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " TAKES MESSAGE": {
+      "main": [
+        [
+          {
+            "node": " SWITCHES BASED ON MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " SWITCHES BASED ON MESSAGE": {
+      "main": [
+        [
+          {
+            "node": " TAKES SEARCHING DETAILS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": " TAKES SEARCHING DETAILS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": " TAKES SEARCHING DETAILS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": " TAKES MEETING DETAILS1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": " TAKES MEETING DETAILS1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": " TAKES MEETING DETAILS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " SEND DUMMY ": {
+      "main": [
+        [
+          {
+            "node": " TAKE DUMMY DATA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " CHECKS DATA": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " TAKE DUMMY DATA": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "CHECKS EVENT PRESENT OR NOT": {
+      "main": [
+        [
+          {
+            "node": "SWITCHES BASED EVENT PRESENT OR NOT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SWITCHES BASED EVENT PRESENT OR NOT": {
+      "main": [
+        [
+          {
+            "node": "EDIT EVENTS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEND MESSAGE": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "614d32"
+}
